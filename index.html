@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NTU Daily Fresh | 台大食堂線上點餐</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Noto Sans TC', sans-serif; 
+            background-color: #F7FAF9; 
+            -webkit-tap-highlight-color: transparent;
+        }
+        .block-card {
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .block-card:active {
+            transform: scale(0.97);
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .loading-shimmer {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body class="text-slate-800 pb-32">
+
+    <!-- Top Branding -->
+    <header class="bg-[#2D5A27] text-white pt-10 pb-16 px-6 text-center rounded-b-[3rem] shadow-lg">
+        <h1 class="text-3xl font-black tracking-tight mb-2">NTU Daily Fresh</h1>
+        <div class="flex items-center justify-center space-x-2 text-green-100 text-sm opacity-90">
+            <span>📍 台大校園食堂</span>
+            <span class="w-1 h-1 bg-green-200 rounded-full"></span>
+            <span>🕒 今日營業中</span>
+        </div>
+    </header>
+
+    <!-- Category Nav -->
+    <nav class="sticky top-4 mx-6 -mt-8 bg-white/90 backdrop-blur-md shadow-xl rounded-2xl z-50 p-2 overflow-x-auto no-scrollbar flex space-x-2">
+        <button onclick="scrollToSection('sandwich')" class="flex-shrink-0 px-5 py-2.5 rounded-xl bg-orange-100 text-orange-700 font-bold text-sm">🥪 三明治</button>
+        <button onclick="scrollToSection('pizza')" class="flex-shrink-0 px-5 py-2.5 rounded-xl bg-amber-100 text-amber-700 font-bold text-sm">🍕 Pizza</button>
+        <button onclick="scrollToSection('burger')" class="flex-shrink-0 px-5 py-2.5 rounded-xl bg-blue-100 text-blue-700 font-bold text-sm">🍔 漢堡</button>
+        <button onclick="scrollToSection('healthy')" class="flex-shrink-0 px-5 py-2.5 rounded-xl bg-green-100 text-green-700 font-bold text-sm">🍱 健康餐盒</button>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main id="menu-container" class="max-w-4xl mx-auto p-6 space-y-12">
+        <!-- 初始載入動畫 -->
+        <div class="space-y-8">
+            <div class="h-8 w-32 loading-shimmer rounded"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="h-32 loading-shimmer rounded-[2rem]"></div>
+                <div class="h-32 loading-shimmer rounded-[2rem]"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Cart Bar -->
+    <div id="cart-bar" class="fixed bottom-6 left-6 right-6 max-w-lg mx-auto bg-slate-900 rounded-[2.5rem] p-4 flex items-center justify-between shadow-2xl z-[100] border border-white/10 hidden">
+        <div class="flex items-center space-x-4 ml-2">
+            <div class="relative">
+                <span class="text-2xl">🛒</span>
+                <span id="cart-count" class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">0</span>
+            </div>
+            <div>
+                <p class="text-gray-400 text-[10px] uppercase font-bold tracking-widest">總計金額</p>
+                <p id="cart-total" class="text-white font-black text-xl leading-none">$0</p>
+            </div>
+        </div>
+        <button onclick="submitOrder()" id="submit-btn" class="bg-[#2D5A27] text-white px-8 py-3 rounded-[1.8rem] font-black text-sm shadow-lg active:scale-95 transition-all">
+            確認下單
+        </button>
+    </div>
+
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbzd_4mKeSqIIsYp-OZ5yrnPogzfiAmEOJx4akaQoiCaumBSsbK1Bds2sR56p-7L85a6ZQ/exec";
+        let cart = [];
+        let menuData = [];
+
+        // 初始化：讀取菜單
+        window.onload = async () => {
+            try {
+                const response = await fetch(API_URL);
+                const result = await response.json();
+                if (result.status === "success") {
+                    menuData = result.data;
+                    renderMenu(menuData);
+                }
+            } catch (error) {
+                document.getElementById('menu-container').innerHTML = `<p class="text-center text-red-500 mt-10">連線失敗，請檢查 API 部署設定。</p>`;
+            }
+        };
+
+        function renderMenu(data) {
+            const container = document.getElementById('menu-container');
+            container.innerHTML = "";
+            
+            const categories = {
+                "sandwich": { title: "手作三明治", color: "orange", tag: "FRESHLY MADE" },
+                "pizza": { title: "薄脆 Pizza", color: "amber", tag: "CRISPY" },
+                "burger": { title: "飽足漢堡", color: "blue", tag: "GOURMET" },
+                "healthy": { title: "每日主廚健康餐盒", color: "green", tag: "CHEF'S PICK" }
+            };
+
+            Object.keys(categories).forEach(catKey => {
+                const items = data.filter(item => item.Category === catKey);
+                if (items.length === 0) return;
+
+                const section = document.createElement('section');
+                section.id = catKey;
+                section.innerHTML = `
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-2xl font-black text-slate-900">${categories[catKey].title}</h2>
+                        <span class="text-xs font-bold text-${categories[catKey].color}-500 bg-${categories[catKey].color}-50 px-2 py-1 rounded">${categories[catKey].tag}</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${items.map(item => `
+                            <div class="block-card bg-white p-5 rounded-[2rem] shadow-sm border border-slate-100 flex items-center space-x-4">
+                                <div class="w-20 h-20 bg-${categories[catKey].color}-50 rounded-2xl flex items-center justify-center text-3xl">${item.Icon || '🍴'}</div>
+                                <div class="flex-1">
+                                    <h3 class="font-bold text-lg leading-none">${item.Name}</h3>
+                                    <p class="text-slate-400 text-xs mt-2">${item.Description}</p>
+                                    <div class="mt-3 flex items-center justify-between">
+                                        <span class="text-${categories[catKey].color}-600 font-black">$${item.Price}</span>
+                                        <button onclick="addToCart('${item.Name}', ${item.Price})" class="bg-${categories[catKey].color}-500 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-md hover:scale-110 active:scale-90">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                container.appendChild(section);
+            });
+        }
+
+        function addToCart(name, price) {
+            cart.push({ name, price });
+            updateCartUI();
+        }
+
+        function updateCartUI() {
+            const cartBar = document.getElementById('cart-bar');
+            const cartCount = document.getElementById('cart-count');
+            const cartTotal = document.getElementById('cart-total');
+            
+            if (cart.length > 0) {
+                cartBar.classList.remove('hidden');
+                cartCount.innerText = cart.length;
+                const total = cart.reduce((sum, item) => sum + item.price, 0);
+                cartTotal.innerText = `$${total}`;
+            }
+        }
+
+        async function submitOrder() {
+            const btn = document.getElementById('submit-btn');
+            const originalText = btn.innerText;
+            btn.innerText = "傳送中...";
+            btn.disabled = true;
+
+            const orderData = {
+                customer: "台大同學",
+                items: cart.map(i => i.name).join(", "),
+                total: cart.reduce((sum, item) => sum + item.price, 0),
+                note: "Web 下單"
+            };
+
+            try {
+                // 使用 JSONP 方式或確保 GAS 部署為 Anyone
+                await fetch(API_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(orderData)
+                });
+                
+                alert("訂單已傳送至試算表！請至 Order Records 查看。");
+                cart = [];
+                updateCartUI();
+                cartBar.classList.add('hidden');
+            } catch (error) {
+                alert("下單失敗，請稍後再試。");
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function scrollToSection(id) {
+            document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
